@@ -30,7 +30,7 @@ class BookViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'destroy']:
-            return [IsOperator()]
+            return [IsOperator(),IsAdmin()]
         return [IsAuthenticated()]
 
 
@@ -40,7 +40,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create','update','destroy', 'accept_order']:
-            return [IsOperator()]
+            return [IsOperator(),IsAdmin()]
         return [IsAuthenticated()]
 
     # CREATE ORDER (book taken)
@@ -77,7 +77,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
             order.save()
 
-    @action(detail=True, methods=['post'], permission_classes=[IsOperator()])
+    @action(detail=True, methods=['post'], permission_classes=[IsOperator(), IsAdmin()])
     def accept_order(self, request, pk=None):
         """
         Endpoint for operators to accept/confirm an order
@@ -104,7 +104,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
     serializer_class = ReservationSerializer
 
     def get_permissions(self):
-        return [IsUser()]
+        return [IsUser(),IsAdmin()]
 
     def perform_create(self, serializer):
         book = serializer.validated_data['book']
@@ -125,7 +125,7 @@ class RatingViewSet(viewsets.ModelViewSet):
     serializer_class = RatingSerializer
 
     def get_permissions(self):
-        return [IsUser()]
+        return [IsUser(),IsAdmin()]
 
     def perform_create(self, serializer):
         user = self.request.user
