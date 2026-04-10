@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from django.contrib.auth.hashers import make_password
 from rest_framework.permissions import IsAuthenticated
 from django.utils.timezone import now
+from rest_framework.exceptions import ValidationError
 
     
 @api_view(['POST'])
@@ -38,21 +39,45 @@ class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
 
     def get_permissions(self):
-        return [IsOperator()]
+        if self.action in ['create','update','destroy', 'accept_order']:
+            return [IsOperator()]
+        return [IsAuthenticated()]
 
+    # CREATE ORDER (book taken)
     def perform_create(self, serializer):
+        book = serializer.validated_data['book']
+
+        if not book.available:
+            raise ValidationError("Book is not available")
+
+        book.available = False
+        book.save()
+
+        serializer.save(
+            user=self.request.user,
+            taken_date=date.today(),
+            due_date=date.today() + timedelta(days=1),  # borrowing period
+            returned=False
+        )
+
+    def perform_update(self, serializer):
         order = serializer.save()
 
         if order.returned:
-            days = (date.today() - order.taken_date).days
+            days = (date.today() - order.due_date).days
 
             if days > 0:
-                penalty = order.book.daily_price * days * 0.01
+                penalty = order.book.daily_price * 0.01 * days
                 order.penalty = penalty
-                order.save()
+            
+            # make book available again
+            book = order.book
+            book.available = True
+            book.save()
+
+            order.save()
 
     @action(detail=True, methods=['post'], permission_classes=[IsOperator()])
-    
     def accept_order(self, request, pk=None):
         """
         Endpoint for operators to accept/confirm an order
@@ -69,7 +94,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             "user": order.user.username,
             "book": order.book.title,
             "taken_date": order.taken_date,
-            "expected_return_date": order.return_date,
+            "expected_return_date": order.due_date,
             "daily_price": order.book.daily_price,
             "status": "accepted"
         }, status=200)
@@ -85,12 +110,15 @@ class ReservationViewSet(viewsets.ModelViewSet):
         book = serializer.validated_data['book']
 
         if not book.available:
-            raise Exception("Book is not available for reservation")
+            raise ValidationError("Book is not available for reservation")
         
         book.available = False
         book.save()
 
-        serializer.save(user=self.request.user)
+        serializer.save(
+            user=self.request.user,
+            expires_at = now() + timedelta(days=1)
+        )
 
 class RatingViewSet(viewsets.ModelViewSet):
     queryset = Rating.objects.all()
@@ -104,7 +132,7 @@ class RatingViewSet(viewsets.ModelViewSet):
         book = serializer.validated_data['book']
 
         if not Order.objects.filter(user=user, book=book, returned=True).exists():
-            raise Exception("You must read the book first")
+            raise ValidationError("You must read the book first")
 
         serializer.save(user=user)
 
