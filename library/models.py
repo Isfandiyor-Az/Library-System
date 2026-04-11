@@ -27,8 +27,31 @@ class Order(models.Model):
     due_date = models.DateField(null=True, blank=True)  
     return_date = models.DateField(null=True, blank=True)
     penalty = models.FloatField(default=0.0)
+    total_price = models.FloatField(default=0.0)
     returned = models.BooleanField(default=False)
     status = models.CharField(default="pending")
+
+    def calculate_bill(self):
+        """
+        Calculates the penalty (1% per day) and the total price.
+        """
+        # 1. Decide which date to use (today, or the day they actually returned it)
+        end_date = self.return_date if self.return_date else date.today()
+
+        # 2. Basic Daily Rental Fee
+        days_borrowed = (end_date - self.taken_date).days
+        if days_borrowed <= 0 : days_borrowed = 1 # minimum 1 day charge
+        base_rent = self.book.daily_price * days_borrowed
+
+        # 3. Penalty Logic (Your readable logic)
+        self.penalty = 0.0
+        if end_date > self.due_date:
+            late_days = (end_date - self.due_date).days
+            self.penalty = self.book.daily_price * 0.01 * late_days
+
+
+        self.total_price = base_rent + self.penalty
+        self.save()
 
     def __str__(self):
         return f"{self.user.username} - {self.book.title}"
