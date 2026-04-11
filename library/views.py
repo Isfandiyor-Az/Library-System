@@ -17,7 +17,7 @@ def register(request):
 
     user = User(
         username=data['username'],
-        role=data.get('role', 'USER')
+        role=data.get('role', 'USER').upper()
     )
     user.set_password(data['password'])  
     user.save()
@@ -29,8 +29,8 @@ class BookViewSet(viewsets.ModelViewSet):
     serializer_class = BookSerializer
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'destroy']:
-            return [IsOperator(),IsAdmin()]
+        if self.action in ['create', 'update', 'destroy','partial_update']:
+            return [(IsOperator | IsAdmin)()]
         return [IsAuthenticated()]
 
 
@@ -39,8 +39,8 @@ class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
 
     def get_permissions(self):
-        if self.action in ['create','update','destroy', 'accept_order']:
-            return [IsOperator(),IsAdmin()]
+        if self.action in ['create','update','destroy','mark_as_returned']:
+            return [(IsOperator | IsAdmin)()]
         return [IsAuthenticated()]
 
     # CREATE ORDER (book taken)
@@ -61,42 +61,41 @@ class OrderViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
-        order = serializer.save()
+        
+        instance = serializer.save()
 
-        if order.returned:
-            days = (date.today() - order.due_date).days
+        if instance.returned and instance.status != "completed":
+            instance.status = "completed"
+            instance.return_date = date.today()
 
-            if days > 0:
-                penalty = order.book.daily_price * 0.01 * days
-                order.penalty = penalty
+            instance.calculate_bill()  # This will calculate penalty and total price, and save the order
             
-            # make book available again
-            book = order.book
-            book.available = True
-            book.save()
 
-            order.save()
-
-    @action(detail=True, methods=['post'], permission_classes=[IsOperator(), IsAdmin()])
-    def accept_order(self, request, pk=None):
-        """
-        Endpoint for operators to accept/confirm an order
-        POST /api/orders/{id}/accept_order/
-        """
+            instance.book.available = True
+            instance.book.save()
+            instance.save()
+    
+    @action(detail=True, methods=['post'])
+    def mark_as_returned(self, request, pk=None):
         order = self.get_object()
 
-        # Check if order is already accepted (if you wanted to track acceptance status)
-        # For now, we just confirm the order exists and is valid
+        if order.returned:
+            return Response({"message": "Order is already marked as returned"}, status=400)
 
-        return Response({
-            "message": "Order accepted successfully",
-            "order_id": order.id,
-            "user": order.user.username,
-            "book": order.book.title,
-            "taken_date": order.taken_date,
-            "expected_return_date": order.due_date,
-            "daily_price": order.book.daily_price,
-            "status": "accepted"
+        order.returned = True
+        order.return_date = date.today()
+        order.status = "completed"
+
+        order.calculate_bill()  # This will calculate penalty and total price, and save the order
+
+        order.book.available = True
+        order.book.save()
+
+        return Response({"message": "Order marked as returned successfully",
+        "book": order.book.title,
+        "daily_price": order.book.daily_price,
+        "penalty": order.penalty,
+        "total_price": order.total_price
         }, status=200)
 
 class ReservationViewSet(viewsets.ModelViewSet):
@@ -104,13 +103,18 @@ class ReservationViewSet(viewsets.ModelViewSet):
     serializer_class = ReservationSerializer
 
     def get_permissions(self):
-        return [IsUser(),IsAdmin()]
+        if self.action in ['confirm_reservation']:
+            return [(IsOperator | IsAdmin)()]
+        return [(IsUser | IsAdmin)()]
 
     def perform_create(self, serializer):
         book = serializer.validated_data['book']
 
         if not book.available:
             raise ValidationError("Book is not available for reservation")
+        
+        elif not book:
+            raise ValidationError({"book": "Book does not exist"})
         
         book.available = False
         book.save()
@@ -120,19 +124,52 @@ class ReservationViewSet(viewsets.ModelViewSet):
             expires_at = now() + timedelta(days=1)
         )
 
+    @action(detail=True, methods=['post']) 
+    def confirm_reservation(self, request, pk=None):
+        reservation = self.get_object()
+
+        if reservation.expires_at < now():
+            # If expired, make book available again and error out
+            reservation.book.available = True
+            reservation.book.save()
+            reservation.delete()
+            raise ValidationError("Reservation has expired and has been deleted")
+
+        # Create an order for the reserved book
+        order = Order.objects.create(
+            user=reservation.user,
+            book=reservation.book,
+            taken_date=date.today(),
+            due_date=date.today() + timedelta(days=1),
+            returned=False
+        )
+
+        # Delete the reservation after confirming
+        reservation.delete()
+
+        return Response({"message": "Reservation confirmed and order created successfully",
+                        "order_id": order.id
+                        }, status=200)  
+                         
+
 class RatingViewSet(viewsets.ModelViewSet):
     queryset = Rating.objects.all()
     serializer_class = RatingSerializer
 
     def get_permissions(self):
-        return [IsUser(),IsAdmin()]
+        return [(IsUser | IsAdmin)()]
 
     def perform_create(self, serializer):
         user = self.request.user
         book = serializer.validated_data['book']
 
+        has_returned = Order.objects.filter(user=user, book=book, returned=True).exists()
+
         if not Order.objects.filter(user=user, book=book, returned=True).exists():
             raise ValidationError("You must read the book first")
+
+        if Rating.objects.filter(user=user, book=book).exists():
+            raise ValidationError("You have already rated this book")
 
         serializer.save(user=user)
 

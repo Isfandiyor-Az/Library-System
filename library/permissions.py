@@ -1,13 +1,14 @@
 from rest_framework.permissions import BasePermission
 
+
 class IsAdmin(BasePermission):
     def has_permission(self, request, view):
-        return request.user.role == 'ADMIN'
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'ADMIN')
 
 class IsOperator(BasePermission):
     def has_permission(self, request, view):
-        return request.user.role == 'OPERATOR'
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'OPERATOR')
 
 class IsUser(BasePermission):
     def has_permission(self, request, view):
-        return request.user.role == 'USER'
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'USER')
