@@ -1,18 +1,18 @@
 services:
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    command: python manage.py runserver 0.0.0.0:${WEB_PORT_INTERNAL}
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "${WEB_PORT_EXTERNAL}:${WEB_PORT_INTERNAL}"
     depends_on:
       - redis
 
   redis:
     image: redis:7
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT_EXTERNAL}:${REDIS_PORT_INTERNAL}"
 
   celery:
     build: .

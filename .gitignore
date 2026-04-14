@@ -1,0 +1,3 @@
+.venv
+.celerybeat-schedule
+.env
