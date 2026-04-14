@@ -1,28 +1,202 @@
-from rest_framework import viewsets
-from .models import *
-from .serializers import *
-from datetime import date, timedelta
-from .permissions import IsAdmin, IsOperator, IsUser
-from rest_framework.decorators import api_view, action
-from rest_framework.response import Response
-from django.contrib.auth.hashers import make_password
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from .permissions import IsAdmin, IsOperator, IsUser
+from rest_framework.response import Response
 from django.utils.timezone import now
-from rest_framework.exceptions import ValidationError
+from datetime import date, timedelta
+from .models import User, Book, Order, Reservation, Rating
+from .serializers import BookSerializer, OrderSerializer, ReservationSerializer, RatingSerializer
 
-    
+
+
+# --- USER AUTH ---
 @api_view(['POST'])
 def register(request):
     data = request.data
-
-    user = User(
+    # create_user hashes the password automatically
+    user = User.objects.create_user(
         username=data['username'],
+        password=data['password'],
         role=data.get('role', 'USER').upper()
     )
-    user.set_password(data['password'])  
-    user.save()
-
     return Response({"message": "User registered successfully"})
+
+# --- BOOK MANAGEMENT ---
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def book_list_create(request):
+    if request.method == 'GET':
+        books = Book.objects.only('id','title','daily_price','book_status') # SELECT only necessary fields for listing
+        serializer = BookSerializer(books, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        if request.user.role not in ['ADMIN', 'OPERATOR']   :
+            return Response({"message": "Permission denied"}, status=403)
+        
+        serializer = BookSerializer(data=request.data) # Create serializer instance with incoming data Json format
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
+@api_view(['GET', 'PUT', 'DELETE']) 
+@permission_classes([IsAuthenticated])
+def book_detail(request, pk):
+    try:
+        book = Book.objects.get(pk=pk)
+    except Book.DoesNotExist:
+        return Response({"message": "Book not found"}, status=404)
+
+    if request.method == 'GET':
+        serializer = BookSerializer(book)
+        return Response(serializer.data)
+
+    elif request.method == 'PUT':
+
+        if request.user.role not in ['ADMIN', 'OPERATOR']:
+            return Response({"message": "Permission denied"}, status=403)
+
+        serializer = BookSerializer(book, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
+
+    elif request.method == 'DELETE':
+        if request.user.role not in ['ADMIN', 'OPERATOR']:
+            return Response({"message": "Permission denied"}, status=403)
+
+        book.delete()
+        return Response(status=204)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def make_reservation(request,book_id):
+    try:
+        book = Book.objects.get(pk=book_id)
+    except Book.DoesNotExist:
+        return Response({"message": "Book not found"}, status=404)
+
+    try:
+        # Autometically calls .save() in Reservation model
+        reservation = Reservation.objects.create(
+            user=request.user,
+            book=book,
+    )
+        return Response({"message": "Book reserved successfully for 24 hours",
+                     "reservation_id": reservation.id}, status=201)
+
+    except ValueError as e:
+        return Response({"message": str(e)}, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_reservations(request):
+    reservations = Reservation.objects.only('id','user','book','reservation_at','expires_at') # SELECT only necessary fields for listing
+    serializer = ReservationSerializer(reservations, many=True)
+    return Response(serializer.data)
+
+# --- ORDERS (Borrow & Return) ---
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated, IsAdmin | IsOperator])
+def create_order(request):
+    if request.method == 'GET':
+        # Just return the list, don't validate a serializer with no data!
+        orders = Order.objects.only('id','user','book_price','taken_date','due_date','penalty', 'total_price')
+        serializer = OrderSerializer(orders, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        # ONLY do this for POST
+        serializer = OrderSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsAdmin | IsOperator])
+def mark_as_returned(request, pk):
+
+    order = get_object_or_404(Order,pk=pk)
+
+    try:
+        order.mark_returned()
+        return Response(
+            {
+                "message": "Returned successfully",
+                "total_price": order.total_price,
+                "penalty": order.penalty
+            }, status=200)
+    except ValidationError as e:
+        return Response({"message": e.message},status=400)
+
+
+# --- RATINGS ---
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_rating(request):
+    # We pass 'context' so the serializer can see 'request.user'
+    serializer = RatingSerializer(data=request.data, context={'request':request})
+
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=201)
+        
+    # If the user hasn't read the book, the error will be in serializer.errors
+    return Response(serializer.errors, status=400)
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''
+from rest_framework import viewsets
+from .permissions import IsAdmin, IsOperator, IsUser
+
+
+from django.contrib.auth.hashers import make_password
+from rest_framework.permissions import IsAuthenticated
+
+from rest_framework.exceptions import ValidationError
 
 class BookViewSet(viewsets.ModelViewSet):
     queryset = Book.objects.all()
@@ -71,7 +245,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             instance.calculate_bill()  # This will calculate penalty and total price, and save the order
             
 
-            instance.book.available = True
+            instance.book.available = True  
             instance.book.save()
             instance.save()
     
@@ -100,7 +274,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
 class ReservationViewSet(viewsets.ModelViewSet):
     queryset = Reservation.objects.all()
-    serializer_class = ReservationSerializer
+    serializer_class = ReservationSerializer 
 
     def get_permissions(self):
         if self.action in ['confirm_reservation']:
@@ -171,6 +345,6 @@ class RatingViewSet(viewsets.ModelViewSet):
         if Rating.objects.filter(user=user, book=book).exists():
             raise ValidationError("You have already rated this book")
 
-        serializer.save(user=user)
+        serializer.save(user=user)'''
 
 

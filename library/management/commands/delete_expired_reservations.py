@@ -5,7 +5,7 @@ from django.db.models import transaction
 
 class Command(BaseCommand):
     help = 'Delete expired reservations and release books'
-
+ex
     def handle(self, *args, **kwargs):
         expired = Reservation.objects.filter(expires_at__lt=now())
         count = expired.count()

@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'drf_yasg',
+    'django_celery_beat',
 
     'rest_framework',
     'library',
@@ -142,3 +143,19 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Celery Configuration Options
+CELERY_BROKER_URL = 'redis://redis:6379/0'
+CELERY_RESULT_BACKEND = 'redis://redis:6379/0'
+CELERY_TIMEZONE = 'Asia/Tashkent'
+
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'update-daily-totals-every-night': {
+        'task': 'library.tasks.run_update_daily_totals',
+        #'schedule': crontab(hour=0, minute=0), # Run every night at midnight
+        'schedule': crontab(minute='*/1'), # For testing: run every minute
+        
+    },
+}
