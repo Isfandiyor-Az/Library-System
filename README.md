@@ -62,7 +62,7 @@ library-system/
 │   ├── permissions.py
 │   ├── management/
 │   │   └── commands/
-│   │       └── delete_expired_reservations.py
+│   │       └── update_daily_totals.py
 │
 ├── manage.py
 ```
