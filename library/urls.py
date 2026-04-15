@@ -1,34 +1,48 @@
-#from rest_framework.routers import DefaultRouter
-#from .views import BookViewSet, OrderViewSet, ReservationViewSet, RatingViewSet
 from django.urls import path
 from . import views
+from .views import BookListCreateAPIView, BookDetailAPIView,ReservationAPIView,OrderListCreateView,MarkAsReturnedView,RatingListCreateView
 
 
-'''rounter = DefaultRouter()
-rounter.register('books', BookViewSet)
-rounter.register('orders', OrderViewSet)
-rounter.register('reservations', ReservationViewSet)
-rounter.register('ratings', RatingViewSet)
-
-urlpatterns = rounter.urls '''
 
 urlpatterns = [
     # Auth
     path('register/', views.register, name='register'),
 
     # Books
-    path('books/', views.book_list_create, name='book-list-get'),
+    path('books/', BookListCreateAPIView.as_view(), name='book-list-create'),
 
-    path('books/<int:pk>/', views.book_detail, name='book-get'),
+    path('books/<int:pk>/', BookDetailAPIView.as_view(), name='book-detail'),
 
     # Orders
-    path('orders/create/', views.create_order, name='order-list-create'),
-    path('orders/<int:pk>/return/', views.mark_as_returned, name='order-return'),
+    path('orders/create/', OrderListCreateView.as_view(), name='order-list-create'),
+    path('orders/<int:pk>/return/', MarkAsReturnedView.as_view(), name='order-return'),
 
     # Reservations
-    path('reservations/<int:book_id>/', views.make_reservation, name='reserve-book'),
-    path('reservations/', views.get_reservations, name='get-reservations'),
+    path('reservations/<int:book_id>/', ReservationAPIView.as_view(), name='reserve-book'),
+    path('reservations/', ReservationAPIView.as_view(), name='get-reservations'),
 
     # Ratings
-    path('ratings/', views.create_rating, name='create-rating'),
+    path('ratings/',RatingListCreateView.as_view(), name='create-rating'),
 ]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

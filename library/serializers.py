@@ -14,6 +14,7 @@ class OrderSerializer(serializers.ModelSerializer):
     book_title = serializers.CharField(source='book.title', read_only=True)
     # 1. You MUST define this here because 'username' isn't in the Order model
     username = serializers.CharField(write_only=True)
+    due_date = serializers.DateField(required=True)
 
     class Meta:
         model = Order
@@ -66,6 +67,10 @@ class OrderSerializer(serializers.ModelSerializer):
 
         taken_date = validated_data.pop('taken_date')
         due_date = validated_data.pop('due_date')
+
+        if not due_date and not  taken_date:
+            raise serializers.ValidationError({"due_date": "Please enter the due_date."})
+        
         
         book = validated_data['book']
 
