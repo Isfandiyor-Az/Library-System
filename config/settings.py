@@ -148,6 +148,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+
 # Celery Configuration Options
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND')
