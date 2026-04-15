@@ -22,9 +22,14 @@ class Book(models.Model):
         ("RESERVED", "Reserved"),
         ("BORROWED", "Borrowed"),
         ("AVAILABLE", "Available"),
+        ("UNAVAILABLE","Unavailable")
     )
 
     book_status = models.CharField(max_length=20, choices=BOOK_STATUS, default="AVAILABLE")
+
+    def delete(self):
+        self.book_status = "UNAVAILABLE"
+        self.save()
 
     def __str__(self):
         return self.title

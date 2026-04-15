@@ -46,6 +46,7 @@ INSTALLED_APPS = [
 
     'rest_framework',
     'library',
+    'silk'
 ]
 
 SWAGGER_SETTINGS = {
@@ -70,6 +71,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'silk.middleware.SilkyMiddleware',
 ]
 
 AUTH_USER_MODEL = 'library.User'
@@ -81,6 +83,14 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ),
+}
+from datetime import timedelta
+SIMPLE_JWT = {
+    # How long the access token (used for API calls) lasts
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2), 
+    
+    # How long the refresh token lasts (used to get a new access token)
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
 
 TEMPLATES = [

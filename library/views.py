@@ -34,7 +34,7 @@ class BookListCreateAPIView(APIView):
         return [IsAuthenticated()]
 
     def get(self, request):
-        books = Book.objects.only('id','title','daily_price','book_status')
+        books = Book.objects.only('id','title','daily_price','book_status').filter(book_status="AVAILABLE")
         serializer = BookSerializer(books, many=True)
         return Response(serializer.data)
 
@@ -112,10 +112,7 @@ class OrderListCreateView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin | IsOperator]
 
     def get(self, request):
-        orders = Order.objects.only(
-            'id', 'user', 'book_price', 'taken_date', 
-            'due_date', 'penalty', 'total_price'
-        )
+        orders = Order.objects.select_related('book','user').all()
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data)
 
