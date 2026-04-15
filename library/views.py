@@ -3,9 +3,11 @@ from rest_framework.permissions import IsAuthenticated
 from .permissions import IsAdmin, IsOperator, IsUser
 from rest_framework.response import Response
 from django.utils.timezone import now
-from datetime import date, timedelta
+from datetime import date, timedelta,datetime
 from .models import User, Book, Order, Reservation, Rating
 from .serializers import BookSerializer, OrderSerializer, ReservationSerializer, RatingSerializer
+from django.shortcuts import get_object_or_404
+from django.core.exceptions import ValidationError
 
 
 
@@ -123,13 +125,24 @@ def mark_as_returned(request, pk):
 
     order = get_object_or_404(Order,pk=pk)
 
+    raw_date = request.data.get('return_date')
+    provided_date = None
+
+    if raw_date:
+        try:
+            # Convert "YYYY-MM-DD" string to a date object
+            provided_date = datetime.strptime(raw_date, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({"error": "Invalid date format. Use YYYY-MM-DD"}, status=400)
+
     try:
-        order.mark_returned()
+        order.mark_returned(provided_date=provided_date)
         return Response(
             {
                 "message": "Returned successfully",
                 "total_price": order.total_price,
-                "penalty": order.penalty
+                "penalty": order.penalty,
+                "return_date": order.return_date
             }, status=200)
     except ValidationError as e:
         return Response({"message": e.message},status=400)
@@ -137,20 +150,71 @@ def mark_as_returned(request, pk):
 
 # --- RATINGS ---
 
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def create_rating(request):
-    # We pass 'context' so the serializer can see 'request.user'
-    serializer = RatingSerializer(data=request.data, context={'request':request})
+    if request.method == 'GET':
+        # Just return the list, don't validate a serializer with no data!
+        ratings = Rating.objects.only('id','user','book','stars')
+        serializer = RatingSerializer(ratings, many=True)
+        return Response(serializer.data)
+    else:
+        # We pass 'context' so the serializer can see 'request.user'
+        serializer = RatingSerializer(data=request.data, context={'request':request})
 
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=201)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=201)
         
     # If the user hasn't read the book, the error will be in serializer.errors
     return Response(serializer.errors, status=400)
 
         
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

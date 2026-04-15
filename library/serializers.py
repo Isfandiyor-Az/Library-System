@@ -3,6 +3,7 @@ from rest_framework import serializers
 from django.utils.timezone import now
 from datetime import timedelta, date
 
+
 class BookSerializer(serializers.ModelSerializer):
     class Meta:
         model = Book
@@ -17,9 +18,9 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ['id', 'user', 'book', 'book_title', 'book_price','total_price',
-                 'taken_date', 'due_date', 'penalty', 'order_status','username']
+                 'taken_date', 'due_date', 'penalty', 'order_status','username','return_date']
 
-        read_only_fields = ['user', 'book_price','total_price', 'due_date', 'penalty']
+        read_only_fields = ['user', 'book_price','total_price', 'penalty']
 
     def to_representation(self, instance):
         # If the book is out, refresh the math before showing it to the user
@@ -63,11 +64,8 @@ class OrderSerializer(serializers.ModelSerializer):
         target_user = validated_data.pop('target_user')
         reservation = validated_data.pop('active_reservation', None)
 
-
-
-        # POP these so they aren't included in **validated_data later
-        validated_data.pop('taken_date', None)
-        validated_data.pop('due_date', None)
+        taken_date = validated_data.pop('taken_date')
+        due_date = validated_data.pop('due_date')
         
         book = validated_data['book']
 
@@ -79,8 +77,8 @@ class OrderSerializer(serializers.ModelSerializer):
 
         return Order.objects.create(
             user = target_user,
-            taken_date = date.today(),
-            due_date = date.today()+timedelta(days=1),
+            taken_date = taken_date,
+            due_date = due_date,
             order_status="ACTIVE",
             **validated_data
         )
@@ -98,9 +96,10 @@ class ReservationSerializer(serializers.ModelSerializer):
 
 class RatingSerializer(serializers.ModelSerializer):
     user_name = serializers.ReadOnlyField(source='user.username',read_only=True)
+    book_title = serializers.ReadOnlyField(source='book.title',read_only=True)
     class Meta:
         model = Rating
-        fields = ["id","user","user_name","book","stars"]
+        fields = ["id","user","user_name","book","stars","book_title"]
         read_only_fields = ['user']
 
     def validate(self, attrs):

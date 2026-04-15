@@ -30,8 +30,8 @@ class Book(models.Model):
         return self.title
 
 class Order(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    book = models.ForeignKey(Book, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.PROTECT)
+    book = models.ForeignKey(Book, on_delete=models.PROTECT)
 
     book_price = models.DecimalField(max_digits=10, decimal_places=2, default=1000.00)
     taken_date = models.DateField()
@@ -80,7 +80,6 @@ class Order(models.Model):
 
     def save(self, *args, **kwargs):
 
-
         if self.order_status in ["ACTIVE","RETURNED"]:
             if self.order_status == "ACTIVE":
                 self.book.book_status = "BORROWED"
@@ -97,9 +96,12 @@ class Order(models.Model):
 
         super().save(*args, **kwargs)
 
-    def mark_returned(self):
+    def mark_returned(self, provided_date=None):
         if self.order_status == "RETURNED":
             raise ValidationError("Order is already marked as returned")
+
+        if provided_date:
+            self.return_date = provided_date
         
         self.order_status = "RETURNED"
         self.save() # This triggers your custom save logic
@@ -108,8 +110,8 @@ class Order(models.Model):
         return f"{self.user.username} - {self.book.title}"
 
 class Reservation(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    book = models.ForeignKey(Book, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.PROTECT)
+    book = models.ForeignKey(Book, on_delete=models.PROTECT)
     reservation_at = models.DateTimeField(auto_now_add=True) 
 
     expires_at = models.DateTimeField(blank=True, null=True)
@@ -126,8 +128,8 @@ class Reservation(models.Model):
         super().save(*args, **kwargs)
 
 class Rating(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    book = models.ForeignKey(Book, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.PROTECT)
+    book = models.ForeignKey(Book, on_delete=models.PROTECT)
     stars = models.PositiveSmallIntegerField(
         validators=[
             MinValueValidator(0),
